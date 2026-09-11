@@ -1,0 +1,13 @@
+# 构建上下文只打包 site/ 内构建所需内容
+site/.git
+site/.github
+site/docs
+site/.agents
+site/node_modules
+site/dist
+site/.astro
+site/*.md
+site/Benchmark.webp
+site/artifacts
+site/playwright.config.ts
+site/lighthouserc.cjs

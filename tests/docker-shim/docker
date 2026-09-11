@@ -1,0 +1,5 @@
+#!/bin/sh
+# docker CLI 兼容垫片: 本机无 docker 时, 用它把 docker 调用转发给 podman,
+# 以便在本机验证项目的 docker 代码路径 (真实 docker 环境仍建议跑一遍 compose)。
+# 用法: PATH="$(cd "$(dirname "$0")" && pwd):$PATH" bash tests/stability.sh
+exec podman "$@"

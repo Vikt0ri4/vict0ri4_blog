@@ -1,0 +1,48 @@
+#!/sbin/openrc-run
+# kjrin710_blog — OpenRC 服务样例 (F1=先手动, 此文件仅供参考, 未安装)
+#
+# 安装为开机自启的步骤(验证通过后再做):
+#   sudo cp init.d/kjrin710 /etc/init.d/kjrin710
+#   sudo chmod +x /etc/init.d/kjrin710
+#   sudo rc-update add kjrin710 default
+#
+# 说明:
+#   - 以 rootless 用户 kjrin 运行, 复用其镜像存储, 不另建 rootful 存储
+#   - 依赖 elogind 提供 /run/user/1000; 若开机时不存在会自动创建
+#   - 需要 sysctl: net.ipv4.ip_unprivileged_port_start=0 (否则绑 80 失败)
+#   - 实际起停逻辑全部复用 scripts/run.sh 与 scripts/stop.sh
+
+USER=kjrin
+UID_NUM=1000
+BASE=/home/$USER/桌面/kjrin710_blog
+
+depend() {
+    need elogind
+    after net
+}
+
+start_pre() {
+    # rootless podman 需要 runtime 目录与 socket 环境
+    [ -d /run/user/$UID_NUM ] || install -d -m 0700 -o $USER -g $USER /run/user/$UID_NUM
+}
+
+start() {
+    ebegin "Starting kjrin710_blog ($BASE/scripts/run.sh)"
+    export HOME=/home/$USER
+    export XDG_RUNTIME_DIR=/run/user/$UID_NUM
+    su -s /bin/sh - $USER -c "cd '$BASE' && ./scripts/run.sh"
+    eend $?
+}
+
+stop() {
+    ebegin "Stopping kjrin710_blog ($BASE/scripts/stop.sh)"
+    export HOME=/home/$USER
+    export XDG_RUNTIME_DIR=/run/user/$UID_NUM
+    su -s /bin/sh - $USER -c "cd '$BASE' && ./scripts/stop.sh"
+    eend $?
+}
+
+restart() {
+    stop
+    start
+}
