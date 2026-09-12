@@ -178,7 +178,15 @@ run_s5() {
   if [ -n "$nodev" ] && python3 -c "import sys;sys.exit(0 if tuple(map(int,'$nodev'.split('.')[:2]))>=(22,12) else 1)" 2>/dev/null; then
     ok "基础镜像 Node 版本满足 >=22.12 (实际 $nodev)"; else bad "Node 版本检查 (实际 $nodev)"; fi
   say "-- 仓库工具链锁定"
-  if [ -d site/.git ] && git -C site remote get-url origin 2>/dev/null | grep -q 'LyraVoid/Shirone'; then ok "site/ 克隆自文档指定仓库 LyraVoid/Shirone"; else bad "克隆源检查"; fi
+  if [ -d site/.git ] && git -C site remote get-url origin 2>/dev/null | grep -q 'LyraVoid/Shirone'; then
+    ok "site/ 克隆自文档指定仓库 LyraVoid/Shirone (submodule 形态)"
+  elif [ ! -d site/.git ] && grep -q 'saicaca' site/LICENSE 2>/dev/null \
+    && grep -q 'LyraVoid/Shirone' README.md 2>/dev/null \
+    && grep -q 'LyraVoid/Shirone' Dockerfile 2>/dev/null; then
+    ok "site/ vendor 入库 (无 .git); 上游 LyraVoid/Shirone 与 MIT 许可已在 README/site/LICENSE 标注"
+  else
+    bad "克隆源检查 (site/ 既非上游克隆, 也未标注来源)"
+  fi
   if grep -q '"packageManager": "pnpm@9.14.4"' site/package.json; then ok "package.json 锁定 pnpm@9.14.4"; else bad "packageManager 字段检查"; fi
   if grep -q 'manage-package-manager-versions = true' site/.npmrc; then ok ".npmrc 版本强制开启"; else bad ".npmrc 检查"; fi
   say "-- 文档部署命令序列 (install --frozen-lockfile → check → build)"

@@ -1,0 +1,15 @@
+# 本地环境变量 (compose 的 SITE_URL 等)
+# 注意用 / 前缀: 否则 ".env.*" 会连带忽略 site/.env.example
+/.env
+/.env.*
+
+# 日志
+*.log
+
+# 编辑器 / 系统
+.idea/
+.vscode/settings.local.json
+*.swp
+.DS_Store
+
+# 注: site/ 内部忽略规则由 site/.gitignore 负责 (dist/ node_modules/ .astro/ 等)

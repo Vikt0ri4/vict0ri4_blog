@@ -9,10 +9,19 @@ vict0ri4_blog/
 │   ├── Dockerfile      # 反代镜像: nginx:alpine
 │   └── default.conf    # 反代 80 → 容器名 vict0ri4-blog:8080
 ├── compose.yaml        # docker compose 入口 (有 compose 时最省事)
-├── site/               # 上游 LyraVoid/Shirone 克隆 (内容/配置都在这改)
+├── site/               # 博客源码 (内容/配置都在这改)
 ├── scripts/            # build.sh / run.sh / stop.sh / logs.sh (自动探测 docker|podman)
+├── runit/vict0ri4/     # Void Linux (runit) 服务样例: run / finish
 └── init.d/vict0ri4     # OpenRC 样例 (未安装, 验证后自行 rc-update)
 ```
+
+### site/ 的来源与许可
+`site/` 是上游 **LyraVoid/Shirone** 的源码，**已 vendor 进本仓库**(普通目录, 非 submodule),
+clone 后即可直接构建, 不需要 `--recursive`。上游为 MIT 许可 (`site/LICENSE`, © 2024 saicaca),
+本仓库保留该 LICENSE 与版权声明; 本仓库对内容 (`src/content/`) 与配置 (`src/config/`) 有本地修改。
+
+同步上游更新: 手动下载上游 release/源码覆盖 `site/`, 注意先备份 `src/content/` 与
+`src/config/` 下的本地改动 (本仓库与上游的差异可用 `git diff` 与上游 tag 对比)。
 
 ## 拓扑 (docker/podman 完全一致)
 - bridge 网络 `vict0ri4-net`, 容器间用容器名 DNS 互访
@@ -22,7 +31,7 @@ vict0ri4_blog/
   rootless 绑 80 需 sysctl (见下)
 
 ## 换新机器 (只有 docker 的 Linux)
-1. 拷整个目录过去; 装好 docker
+1. `git clone <本仓库>` (site/ 随仓库收录, 无需 `--recursive`); 装好 docker
 2. `scripts/build.sh` 或 `docker compose up -d --build`
 3. 验证 `curl http://127.0.0.1/`
 rootful docker 无需 sysctl; rootless docker/podman 绑 80 才需要。
@@ -76,7 +85,7 @@ PATH="$PWD/tests/docker-shim:$PATH" bash tests/stability.sh   # 用 podman 垫�
 ## 文档合规记录
 严格对照 docs.shirone.mysqil.com/guide/get-started/:
 - ✅ Node >= 22.12 (node:22-slim) / pnpm 9.14.4 (corepack) / --frozen-lockfile
-- ✅ 克隆自 LyraVoid/Shirone / .npmrc 版本强制 / 纯静态 dist (无 SSR adapter)
+- ✅ 上游 LyraVoid/Shirone 已 vendor 入库 (MIT, 保留 site/LICENSE 与署名) / .npmrc 版本强制 / 纯静态 dist (无 SSR adapter)
 - ✅ 部署序列: site 注入 (build-arg SITE_URL, 宿主克隆保持纯净) → pnpm check → pnpm build → Pagefind
 - ⚠️ 偏离: 文档另列 `pnpm type-check`, 但上游 HEAD 该命令自身为红 (TS9007/TS9011, isolatedDeclarations
   多处未标注), 上游 CI 只跑 check:manifest + build; 本镜像对齐上游真实标准, 不执行 type-check。
