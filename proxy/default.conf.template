@@ -1,12 +1,13 @@
-# vict0ri42 反代入口
-# 与博客容器同处 bridge 网络 vict0ri4-net (docker/podman 一致),
-# 通过容器名 DNS 访问内网博客: vict0ri4-blog:8080
+# vict0ri4_blog 反代入口 (模板: nginx 官方 entrypoint 以 envsubst 渲染)
+#   bridge 模式(默认):  BLOG_UPSTREAM=vict0ri4-blog        (容器名 DNS)
+#   pasta 降级模式:     BLOG_UPSTREAM=host.containers.internal (宿主别名)
+# ${BLOG_UPSTREAM} 之外的 $ 变量($host/$remote_addr...) 不会被替换
 server {
     listen 80 default_server;
     server_name _;
 
     location / {
-        proxy_pass http://vict0ri4-blog:8080;
+        proxy_pass http://${BLOG_UPSTREAM}:8080;
         proxy_http_version 1.1;
 
         proxy_set_header Host              $host;

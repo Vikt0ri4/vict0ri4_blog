@@ -1,0 +1,10 @@
+#!/bin/sh
+# vict0ri4_blog — runit stop 钩子 (sv down vict0ri4 时触发)
+BASE=/home/kjrin/桌面/vict0ri4_blog1
+RUNAS=kjrin
+
+export HOME=/home/$RUNAS
+export XDG_RUNTIME_DIR=/run/user/1000
+
+echo "[vict0ri4] stopping containers"
+chpst -u "$RUNAS:$RUNAS" "$BASE/scripts/stop.sh" || true

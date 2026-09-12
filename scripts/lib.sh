@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# kjrin710_blog 共享函数库 (被 build.sh / run.sh source)
+# vict0ri4_blog 共享函数库 (被 build.sh / run.sh source)
 
 # 探测本机主出口 IP (默认路由 src): 机器 IP 由 DHCP 动态分配, 禁止写死。
 detect_ip() {

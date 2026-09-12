@@ -1,10 +1,10 @@
 #!/sbin/openrc-run
-# kjrin710_blog — OpenRC 服务样例 (F1=先手动, 此文件仅供参考, 未安装)
+# vict0ri4_blog — OpenRC 服务样例 (F1=先手动, 此文件仅供参考, 未安装)
 #
 # 安装为开机自启的步骤(验证通过后再做):
-#   sudo cp init.d/kjrin710 /etc/init.d/kjrin710
-#   sudo chmod +x /etc/init.d/kjrin710
-#   sudo rc-update add kjrin710 default
+#   sudo cp init.d/vict0ri4 /etc/init.d/vict0ri4
+#   sudo chmod +x /etc/init.d/vict0ri4
+#   sudo rc-update add vict0ri4 default
 #
 # 说明:
 #   - 以 rootless 用户 kjrin 运行, 复用其镜像存储, 不另建 rootful 存储
@@ -14,7 +14,7 @@
 
 USER=kjrin
 UID_NUM=1000
-BASE=/home/$USER/桌面/kjrin710_blog
+BASE=/home/$USER/桌面/vict0ri4_blog
 
 depend() {
     need elogind
@@ -27,7 +27,7 @@ start_pre() {
 }
 
 start() {
-    ebegin "Starting kjrin710_blog ($BASE/scripts/run.sh)"
+    ebegin "Starting vict0ri4_blog ($BASE/scripts/run.sh)"
     export HOME=/home/$USER
     export XDG_RUNTIME_DIR=/run/user/$UID_NUM
     su -s /bin/sh - $USER -c "cd '$BASE' && ./scripts/run.sh"
@@ -35,7 +35,7 @@ start() {
 }
 
 stop() {
-    ebegin "Stopping kjrin710_blog ($BASE/scripts/stop.sh)"
+    ebegin "Stopping vict0ri4_blog ($BASE/scripts/stop.sh)"
     export HOME=/home/$USER
     export XDG_RUNTIME_DIR=/run/user/$UID_NUM
     su -s /bin/sh - $USER -c "cd '$BASE' && ./scripts/stop.sh"

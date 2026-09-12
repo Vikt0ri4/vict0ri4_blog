@@ -1,0 +1,29 @@
+#!/bin/sh
+# vict0ri4_blog — Void Linux (runit) 服务脚本示例
+#
+# 安装(需要 root):
+#   mkdir -p /etc/sv/vict0ri4
+#   cp runit/vict0ri4/run runit/vict0ri4/finish /etc/sv/vict0ri4/
+#   chmod +x /etc/sv/vict0ri4/run /etc/sv/vict0ri4/finish
+#   ln -s /etc/sv/vict0ri4 /var/service/          # 启用(开机自启)
+#   如需停用: rm /var/service/vict0ri4
+#
+# 说明:
+#   - runit 的 run 脚本必须保持前台; 本项目容器是后台常驻, 故起完服务后挂起保持
+#   - 以 rootless 用户运行(默认 kjrin), 复用其 podman 存储
+#   - Void 用户注意: 若内核缺 xt_comment, scripts/run.sh 会自动降级为 pasta 模式
+
+BASE=/home/kjrin/桌面/vict0ri4_blog1
+RUNAS=kjrin
+
+exec 2>&1
+export HOME=/home/$RUNAS
+export XDG_RUNTIME_DIR=/run/user/1000
+
+echo "[vict0ri4] starting via $BASE/scripts/run.sh"
+chpst -u "$RUNAS:$RUNAS" "$BASE/scripts/run.sh" || {
+    echo "[vict0ri4] 启动失败(常见原因: 未跑 setup-host.sh / 低端口未放开 / 镜像未构建)"
+    exit 1
+}
+# 保持服务处于 run 状态
+exec sleep infinity

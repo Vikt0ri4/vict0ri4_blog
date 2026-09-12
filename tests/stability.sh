@@ -42,17 +42,26 @@ run_s1() {
   if ./scripts/build.sh >/tmp/s1_build2.log 2>&1; then ok "build.sh 第2次退出0"; else bad "build.sh 第2次退出0"; fi
   say "-- 1.2 两次构建镜像 ID 不变 (输入相同→可复现)"
   local id1 id2
-  id1=$($R image inspect kjrin710-blog:latest --format '{{.Id}}' 2>/dev/null)
+  id1=$($R image inspect vict0ri4-blog:latest --format '{{.Id}}' 2>/dev/null)
   # 第二次 build 前先记录?? 上面连续构建, 无法取"第1次后"ID; 改用: build1 后 ID 记录
   # 简化: 幂等 = 构建日志命中缓存
   if grep -qE "CACHED|Using cache" /tmp/s1_build2.log; then ok "第2次构建命中层缓存 (CACHED/Using cache)"; else bad "第2次构建未命中缓存(需重跑全量?)"; fi
   say "-- 1.3 镜像可被运行时识别"
-  check "kjrin710-blog 镜像存在" $R image inspect kjrin710-blog:latest
-  check "kjrin710-proxy 镜像存在" $R image inspect kjrin710-proxy:latest
-  say "-- 1.4 反代配置正确 (静态 upstream, bridge 容器名 DNS)"
+  check "vict0ri4-blog 镜像存在" $R image inspect vict0ri4-blog:latest
+  check "vict0ri4-proxy 镜像存在" $R image inspect vict0ri4-proxy:latest
+  say "-- 1.4 反代配置正确 (模板渲染, 支持 bridge/pasta 两种上游)"
+  if [ -f proxy/default.conf.template ] && grep -q 'BLOG_UPSTREAM' proxy/default.conf.template; then
+    ok "反代 upstream 经模板注入 (可切 bridge/pasta)"
+  else
+    bad "缺少 proxy/default.conf.template"
+  fi
   local conf
-  conf=$($R exec kjrin710-proxy cat /etc/nginx/conf.d/default.conf 2>/dev/null || echo "")
-  if echo "$conf" | grep -q "proxy_pass http://kjrin710-blog:8080"; then ok "upstream 指向 kjrin710-blog:8080"; else bad "upstream 配置检查"; fi
+  conf=$($R exec vict0ri4-proxy cat /etc/nginx/conf.d/default.conf 2>/dev/null || echo "")
+  if echo "$conf" | grep -qE 'proxy_pass http://(vict0ri4-blog|host\.containers\.internal):8080'; then
+    ok "渲染后的 upstream 正确 ($(echo "$conf" | grep -oE 'proxy_pass http://[^;]*'))"
+  else
+    bad "upstream 渲染异常"
+  fi
   if echo "$conf" | grep -qE 'proxy_set_header Host\s+\$host'; then ok "nginx 内建变量 \$host 完好"; else bad "\$host 变量完好性"; fi
   if echo "$conf" | grep -q 'listen 80 default_server'; then ok "反代监听 80 default_server"; else bad "反代监听配置"; fi
 }
@@ -62,9 +71,9 @@ run_s2() {
   say "-- 2.1 run.sh 连续执行不产生重复容器"
   if ./scripts/run.sh >/tmp/s2_run.log 2>&1; then ok "run.sh 再次执行退出0"; else bad "run.sh 再次执行退出0"; fi
   local n
-  n=$($R ps -a --filter name=kjrin710-blog --format '{{.Names}}' 2>/dev/null | grep -c kjrin710-blog || true)
+  n=$($R ps -a --filter name=vict0ri4-blog --format '{{.Names}}' 2>/dev/null | grep -c vict0ri4-blog || true)
   [ "$n" -le 1 ] && ok "博客容器仅 1 个 (实际 $n)" || bad "博客容器数量 (实际 $n)"
-  n=$($R ps -a --filter name=kjrin710-proxy --format '{{.Names}}' 2>/dev/null | grep -c kjrin710-proxy || true)
+  n=$($R ps -a --filter name=vict0ri4-proxy --format '{{.Names}}' 2>/dev/null | grep -c vict0ri4-proxy || true)
   [ "$n" -le 1 ] && ok "反代容器仅 1 个 (实际 $n)" || bad "反代容器数量 (实际 $n)"
   say "-- 2.2 stop 释放 80, run 恢复"
   ./scripts/stop.sh >/dev/null 2>&1
@@ -125,12 +134,12 @@ run_s3() {
 run_s4() {
   say "S4 故障恢复"
   say "-- 4.1 杀博客容器 → 重启恢复"
-  $R kill kjrin710-blog >/dev/null 2>&1
+  $R kill vict0ri4-blog >/dev/null 2>&1
   sleep 1
   local code_down
   code_down=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BASE/" || true)
   ok "博客被杀时入口可观测(记录: $code_down)"
-  $R start kjrin710-blog >/dev/null 2>&1 || true
+  $R start vict0ri4-blog >/dev/null 2>&1 || true
   # 恢复断言: 给 nginx 就绪 + rootlessport 抖动留重试窗口 (每次 2s, 最长 ~20s)
   local okrestart=1
   for _ in $(seq 1 10); do
@@ -139,11 +148,11 @@ run_s4() {
   done
   if [ "$okrestart" -eq 0 ]; then ok "博客重启后恢复"; else bad "博客重启后恢复"; fi
   say "-- 4.2 杀反代 → 重启恢复"
-  $R kill kjrin710-proxy >/dev/null 2>&1
+  $R kill vict0ri4-proxy >/dev/null 2>&1
   sleep 1
   if curl -s --max-time 3 -o /dev/null "$BASE/"; then :; fi
   ok "反代被杀时入口表现已观测"
-  $R start kjrin710-proxy >/dev/null 2>&1
+  $R start vict0ri4-proxy >/dev/null 2>&1
   sleep 3
   check_curl "反代重启后恢复" 200 "/"
   say "-- 4.3 run.sh 循环 5 次无资源泄漏"
@@ -154,7 +163,7 @@ run_s4() {
   done
   [ "$leak" -eq 0 ] && ok "run.sh x5 全部成功"
   local cnt
-  cnt=$($R ps -a --format '{{.Names}}' | grep -cE '^(kjrin710-blog|kjrin710-proxy)$' || true)
+  cnt=$($R ps -a --format '{{.Names}}' | grep -cE '^(vict0ri4-blog|vict0ri4-proxy)$' || true)
   [ "$cnt" -eq 2 ] && ok "循环后容器恰好 2 个" || bad "循环后容器数 (实际 $cnt)"
   check_curl "最终入口健康" 200 "/"
 }
@@ -188,11 +197,11 @@ run_s5() {
   if [ -z "$has_adapter" ]; then ok "无 SSR adapter (纯静态输出)"; else bad "发现 SSR adapter: $has_adapter"; fi
   if grep -q "output:.*'server'" site/astro.config.mjs; then bad "astro.config 声明了 server 输出"; else ok "astro.config 未声明 server 输出"; fi
   say "-- 运行期产物 (容器内 dist)"
-  $R exec kjrin710-blog sh -c 'test -f /usr/share/nginx/html/index.html' 2>/dev/null \
+  $R exec vict0ri4-blog sh -c 'test -f /usr/share/nginx/html/index.html' 2>/dev/null \
     && ok "dist/index.html 存在" || bad "dist/index.html 检查"
-  if $R exec kjrin710-blog sh -c 'ls /usr/share/nginx/html/pagefind/*.js >/dev/null 2>&1'; then ok "Pagefind 索引产物已随 dist 部署"; else bad "pagefind 产物检查"; fi
+  if $R exec vict0ri4-blog sh -c 'ls /usr/share/nginx/html/pagefind/*.js >/dev/null 2>&1'; then ok "Pagefind 索引产物已随 dist 部署"; else bad "pagefind 产物检查"; fi
   local blogconf
-  blogconf=$($R exec kjrin710-blog cat /etc/nginx/conf.d/default.conf 2>/dev/null || true)
+  blogconf=$($R exec vict0ri4-blog cat /etc/nginx/conf.d/default.conf 2>/dev/null || true)
   if echo "$blogconf" | grep -q proxy_pass; then bad "博客 nginx 含反向代理 (违背纯静态托管)"; else ok "博客 nginx 纯静态托管 (无 proxy_pass)"; fi
   say "-- siteConfig 部署前更新 (文档: 部署前更新 site/base; 由构建期 ARG 注入, 宿主保持纯净)"
   local host_site
@@ -202,7 +211,7 @@ run_s5() {
     || ok "宿主 siteConfig 状态可接受 ($host_site)"
   # 部署产物验证: dist sitemap 的 <loc> 必须指向当前机器实际 IP (禁止残留过期地址)
   local loc cur
-  loc=$($R exec kjrin710-blog sh -c 'grep -oE "<loc>[^<]*</loc>" /usr/share/nginx/html/sitemap-0.xml 2>/dev/null | head -1' 2>/dev/null | sed 's/<[^>]*>//g')
+  loc=$($R exec vict0ri4-blog sh -c 'grep -oE "<loc>[^<]*</loc>" /usr/share/nginx/html/sitemap-0.xml 2>/dev/null | head -1' 2>/dev/null | sed 's/<[^>]*>//g')
   cur="http://$(detect_ip)/"
   case "$loc" in
     "$cur"*|"http://127.0.0.1/"*) ok "产物 sitemap loc 指向当前实际地址 ($loc)" ;;
@@ -243,7 +252,7 @@ run_s6() {
     out=$(PATH="$SHIM:$PATH" ./scripts/run.sh 2>&1 || true)
     if echo "$out" | grep -q '使用运行时: docker'; then ok "垫片下正确识别为 docker 运行时"; else bad "垫片下运行时识别"; fi
     sleep 2
-    apt=$(PATH="$SHIM:$PATH" docker ps --format '{{.Names}}' 2>/dev/null | grep -cE '^kjrin710-(blog|proxy)$' || true)
+    apt=$(PATH="$SHIM:$PATH" docker ps --format '{{.Names}}' 2>/dev/null | grep -cE '^vict0ri4-(blog|proxy)$' || true)
     [ "$apt" -eq 2 ] && ok "docker 路径容器数量正确 (2)" || bad "docker 路径容器数量 ($apt)"
     code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://127.0.0.1/)
     [ "$code" = "200" ] && ok "docker 路径入口 HTTP 200" || bad "docker 路径入口 (got $code)"
@@ -274,8 +283,8 @@ run_s7() {
   fi
   if grep -q 'pnpm build ||' Dockerfile; then
     ok "Dockerfile 含构建重试兜底 (抗 CDN 抖动)"; else bad "Dockerfile 缺少构建重试兜底"; fi
-  if [ -f /tmp/kjrin710_build.log ]; then
-    if grep -q '重试一次' /tmp/kjrin710_build.log; then
+  if [ -f /tmp/vict0ri4_build.log ]; then
+    if grep -q '重试一次' /tmp/vict0ri4_build.log; then
       ok "最近构建触发了重试兜底并成功"
     else
       ok "最近构建一次通过"
@@ -283,11 +292,70 @@ run_s7() {
   else
     ok "无构建日志, 跳过"
   fi
-  if $R exec kjrin710-blog sh -c 'find /usr/share/nginx/html -name "*.woff2" | grep -q .'; then
-    ok "部署产物内含字体文件 ($($R exec kjrin710-blog sh -c 'find /usr/share/nginx/html -name "*.woff2" | wc -l') 个)"
+  if $R exec vict0ri4-blog sh -c 'find /usr/share/nginx/html -name "*.woff2" | grep -q .'; then
+    ok "部署产物内含字体文件 ($($R exec vict0ri4-blog sh -c 'find /usr/share/nginx/html -name "*.woff2" | wc -l') 个)"
   else
     bad "dist 中未找到字体文件"
   fi
+}
+
+run_s8() {
+  say "S8 复制功能兼容性 (非安全上下文兜底)"
+  if [ -f site/src/utils/clipboard.ts ] && grep -q 'execCommand' site/src/utils/clipboard.ts; then
+    ok "统一复制工具存在且含 execCommand 兜底"
+  else
+    bad "缺少带兜底的复制工具 src/utils/clipboard.ts"
+  fi
+  if grep -q 'isSecureContext' site/src/utils/clipboard.ts; then
+    ok "按安全上下文选择实现 (https/localhost 优先用异步 API)"
+  else
+    bad "未区分安全上下文"
+  fi
+  local direct
+  direct=$(grep -rl 'navigator.clipboard.writeText' site/src --include='*.ts' --include='*.astro' --include='*.svelte' 2>/dev/null | grep -v 'src/utils/clipboard.ts' || true)
+  if [ -z "$direct" ]; then ok "所有调用点均改用统一工具 (无裸 clipboard 调用)"; else bad "仍有裸调用: $direct"; fi
+  local n
+  n=$(grep -rl 'copyPlainText' site/src --include='*.ts' --include='*.astro' --include='*.svelte' 2>/dev/null | wc -l)
+  [ "$n" -ge 5 ] && ok "调用点已接入统一工具 (共 $n 个文件)" || bad "接入点偏少 (仅 $n 个文件)"
+}
+
+
+run_s10() {
+  say "S10 Void Linux 构建兼容 (容器内完整跑一遍构建)"
+  if [ ! -f tests/void-build-test.sh ]; then bad "缺少 tests/void-build-test.sh"; return; fi
+  if grep -q 'xt_comment' scripts/run.sh && grep -q 'pasta' scripts/run.sh; then
+    ok "run.sh 具备网络自动降级 (bridge 不可用时走 pasta)"
+  else
+    bad "run.sh 缺少网络降级逻辑"
+  fi
+  if [ -f runit/vict0ri4/run ] && [ -f runit/vict0ri4/finish ]; then
+    ok "提供 runit 服务脚本 (Void Linux 开机自启)"
+  else
+    bad "缺少 runit 服务脚本"
+  fi
+  if grep -q 'void' scripts/setup-host.sh; then ok "setup-host.sh 含 Void/xbps 适配"; else bad "setup-host.sh 未适配 Void"; fi
+  say "-- 降级路径实测 (FORCE_PASTA=1 模拟内核缺 xt_comment 的 Void)"
+  local out2
+  out2=$(FORCE_PASTA=1 ./scripts/run.sh 2>&1 || true)
+  if echo "$out2" | grep -q 'pasta 降级'; then
+    ok "自动降级为 pasta 模式"
+    sleep 2
+    local c2
+    c2=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://127.0.0.1/ || echo 000)
+    [ "$c2" = "200" ] && ok "降级模式下入口 HTTP 200" || bad "降级模式入口返回 $c2"
+  else
+    bad "未进入 pasta 降级模式"
+  fi
+  ./scripts/run.sh >/dev/null 2>&1; sleep 2
+  local c3
+  c3=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://127.0.0.1/ || echo 000)
+  [ "$c3" = "200" ] && ok "恢复 bridge 模式 200" || bad "恢复后入口返回 $c3"
+  say "-- Void 容器内完整构建"
+  echo "  … 正在 Void 容器内构建 (约 1-3 分钟)"
+  local out
+  out=$(bash tests/void-build-test.sh 2>&1 | tail -3)
+  echo "$out" | sed 's/^/    /'
+  if echo "$out" | grep -q 'Void 构建兼容'; then ok "Void 内构建通过"; else bad "Void 内构建失败"; fi
 }
 
 # ---- 入口: 按参数选择缝 (参数如 S1/s1 均可) ----
@@ -297,7 +365,7 @@ if [ $# -gt 0 ]; then
     "$fn" || true
   done
 else
-  run_s1; run_s2; run_s3; run_s4; run_s5; run_s6; run_s7
+  run_s1; run_s2; run_s3; run_s4; run_s5; run_s6; run_s7; run_s8; run_s10
 fi
 
 say "结果汇总"

@@ -1,6 +1,6 @@
-# kjrin7102 — docker compose 入口 (docker compose up -d --build)
+# vict0ri42 — docker compose 入口 (docker compose up -d --build)
 # 注: 本机无 compose 时用 scripts/run.sh; podman 亦可配合 docker-compose provider 使用
-name: kjrin710
+name: vict0ri4
 
 services:
   blog:
@@ -8,27 +8,27 @@ services:
       context: .
       args:
         SITE_URL: ${SITE_URL:-http://127.0.0.1/}
-    image: kjrin710-blog:latest
-    container_name: kjrin710-blog
+    image: vict0ri4-blog:latest
+    container_name: vict0ri4-blog
     restart: unless-stopped
     networks:
-      kjrin710:
+      vict0ri4:
         ipv4_address: 10.89.88.10
     expose: ["8080"]
 
   proxy:
     build: ./proxy
-    image: kjrin710-proxy:latest
-    container_name: kjrin710-proxy
+    image: vict0ri4-proxy:latest
+    container_name: vict0ri4-proxy
     restart: unless-stopped
     depends_on:
       - blog
     ports:
       - "80:80"
-    networks: [kjrin710]
+    networks: [vict0ri4]
 
 networks:
-  kjrin710:
+  vict0ri4:
     driver: bridge
     ipam:
       config:

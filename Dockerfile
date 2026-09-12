@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
 # ============================================================
-# kjrin710 博客 (部署实验台, docker/podman 双兼容)
+# vict0ri4 博客 (部署实验台, docker/podman 双兼容)
 # 严格遵循 https://docs.shirone.mysqil.com/guide/get-started/
 #   环境要求: Node >= 22.12 | pnpm 9.x (仓库锁定 pnpm@9.14.4) | Git
 # 拓扑: 与反代容器同处 bridge 网络, 本容器监听 8080 不发布端口,
-#       由 kjrin710-proxy 作为唯一对外入口发布 80。
+#       由 vict0ri4-proxy 作为唯一对外入口发布 80。
 # ============================================================
 
 # 构建阶段
@@ -32,7 +32,10 @@ COPY site/ ./
 
 RUN sed -i "s|^\(\s*site: \).*|\1\"${BUILD_SITE_URL}\",|" src/config/siteConfig.ts \
   && pnpm check \
-  && (pnpm build || (echo '[build] 首次失败(常见于字体 CDN 抖动), 重试一次...' && pnpm build))
+  && { ok=0; for i in 1 2 3; do \
+         if pnpm build; then ok=1; break; fi; \
+         echo "[build] attempt $i failed (font CDN flake), retrying in 10s"; sleep 10; \
+       done; [ "$ok" = 1 ]; }
 
 # 运行阶段 
 FROM nginx:alpine
